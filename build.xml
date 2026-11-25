@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="code.coverage.with.cobertura" default="coverage" basedir=".">
+  <description>Project's code coverage project with Cobertura</description>
+
+  <property file="build.properties"/>
+
+  <path id="cobertura.classpath">
+    <fileset dir="${cobertura.dir}">
+      <include name="cobertura-2.1.1.jar"/>
+      <include name="lib/**/*.jar"/>
+    </fileset>
+  </path>
+
+  <path id="junit.classpath">
+    <fileset dir="${lib.dir}">
+      <include name="junit-4.7.jar"/>
+      <include name="junit-dep-4.7.jar"/>
+    </fileset>
+  </path>
+
+  <taskdef classpathref="cobertura.classpath" resource="tasks.properties"/>
+
+  <target name="init">
+    <mkdir dir="${classes.dir}"/>
+    <mkdir dir="${instrumented.dir}"/>
+    <mkdir dir="${reports.xml.dir}"/>
+    <mkdir dir="${reports.html.dir}"/>
+    <mkdir dir="${coverage.xml.dir}"/>
+    <mkdir dir="${coverage.summaryxml.dir}"/>
+    <mkdir dir="${coverage.html.dir}"/>
+  </target>
+
+  <target name="compile" depends="init">
+    <javac srcdir="${src.dir}" destdir="${classes.dir}" debug="yes"
+           release="8" includeantruntime="false">
+      <classpath refid="cobertura.classpath"/>
+      <classpath refid="junit.classpath"/>
+    </javac>
+  </target>
+
+  <target name="instrument" depends="init,compile">
+    <!-- Hapus file data coverage dan instrumentasi lama. -->
+    <delete file="cobertura.ser"/>
+    <delete dir="${instrumented.dir}"/>
+
+    <!-- Instrument class aplikasi, hasilnya ke ${instrumented.dir}. -->
+    <cobertura-instrument todir="${instrumented.dir}">
+      <!-- Abaikan baris source yang mengacu ke log4j. -->
+      <ignore regex="org.apache.log4j.*"/>
+      <fileset dir="${classes.dir}">
+        <!-- Instrument class aplikasi, bukan class test. -->
+        <include name="**/*.class"/>
+        <exclude name="**/*Test.class"/>
+      </fileset>
+    </cobertura-instrument>
+  </target>
+
+  <target name="test" depends="init,compile">
+    <junit fork="yes" dir="${basedir}" failureProperty="test.failed">
+      <!-- Penting: class hasil instrument harus di depan class asli. -->
+      <sysproperty key="net.sourceforge.cobertura.datafile"
+                   file="${basedir}/cobertura.ser"/>
+      <classpath location="${instrumented.dir}"/>
+      <classpath location="${classes.dir}"/>
+
+      <!-- Class instrument butuh runtime Cobertura dan dependensinya. -->
+      <classpath refid="cobertura.classpath"/>
+      <classpath refid="junit.classpath"/>
+
+      <formatter type="xml"/>
+      <test name="${testcase}" todir="${reports.xml.dir}" if="testcase"/>
+      <batchtest todir="${reports.xml.dir}" unless="testcase">
+        <fileset dir="${src.dir}">
+          <include name="**/*Test.java"/>
+        </fileset>
+      </batchtest>
+    </junit>
+
+    <junitreport todir="${reports.xml.dir}">
+      <fileset dir="${reports.xml.dir}">
+        <include name="TEST-*.xml"/>
+      </fileset>
+      <report format="frames" todir="${reports.html.dir}"/>
+    </junitreport>
+  </target>
+
+  <target name="coverage-check">
+    <cobertura-check branchrate="34" totallinerate="100"/>
+  </target>
+
+  <target name="coverage-report">
+    <!-- Laporan XML dengan atribut "srcdir". -->
+    <cobertura-report srcdir="${src.dir}" destdir="${coverage.xml.dir}" format="xml"/>
+  </target>
+
+  <target name="summary-coverage-report">
+    <!-- Laporan summary XML dengan atribut "srcdir". -->
+    <cobertura-report srcdir="${src.dir}" destdir="${coverage.summaryxml.dir}"
+                      format="summaryXml"/>
+  </target>
+
+  <target name="alternate-coverage-report">
+    <!-- Laporan HTML memakai nested fileset untuk source. -->
+    <cobertura-report destdir="${coverage.html.dir}">
+      <fileset dir="${src.dir}">
+        <include name="**/*.java"/>
+      </fileset>
+    </cobertura-report>
+  </target>
+
+  <target name="clean" description="Hapus semua file hasil build/test.">
+    <delete dir="${classes.dir}"/>
+    <delete dir="${instrumented.dir}"/>
+    <delete dir="${reports.dir}"/>
+    <delete file="cobertura.log"/>
+    <delete file="cobertura.ser"/>
+    <delete file="build.xml~"/>
+    <delete file="build.properties~"/>
+  </target>
+
+  <target name="coverage"
+          depends="compile,instrument,test,coverage-report,summary-coverage-report,alternate-coverage-report"
+          description="Compile, instrument, jalankan test, dan buat laporan JUnit serta coverage."/>
+</project>
